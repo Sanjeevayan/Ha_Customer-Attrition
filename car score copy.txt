@@ -1,0 +1,202 @@
+How to tell if an account has renewed or not
+
+Customer attrition is not an event, it is the absense of a renewal booking for an account with an expiring contract.
+
+To view expiring contracts for Q2:
+
+SELECT [ID]
+      ,[SalesOrder#]
+      ,[Billing Dt]
+      ,[Bookings Amount]
+      ,[Bookings Quantity]
+      ,[Material #]
+      ,[Deal Type]
+      ,[Product Type]
+      ,[Reseller #]
+      ,[End Cust #]
+      ,[Contract Start]
+      ,[Contract End]
+      ,[BOARD_GEO]
+      ,[BOARD_PROD_FAMILY]
+      ,[First Year Bkg Amt Commissionable]
+      ,[AccountID]
+  FROM [Bookings].[dbo].[Bookings_All]
+
+Where [Contract End] >= '2018-04-01' and [Contract End] <= '2018-06-30'
+and [Product Type] in ('MNT','SUB','SAS')
+
+To view Renewed contracts in Q2:
+
+SELECT [ID]
+      ,[SalesOrder#]
+      ,[Billing Dt]
+      ,[Bookings Amount]
+      ,[Bookings Quantity]
+      ,[Material #]
+      ,[Deal Type]
+      ,[Product Type]
+      ,[Reseller #]
+      ,[End Cust #]
+      ,[Contract Start]
+      ,[Contract End]
+      ,[BOARD_GEO]
+      ,[BOARD_PROD_FAMILY]
+      ,[First Year Bkg Amt Commissionable]
+      ,[AccountID]
+  FROM [Bookings].[dbo].[Bookings_All]
+
+Where [Contract Start] >= '2018-04-02' and [Contract End] <= '2018-07-01'
+and [Product Type] in ('MNT','SUB','SAS')
+and [Deal Type] = 'Renewal'
+
+When calculating the renewal rate we tend to use slightly different logic but the point is to illustrate where the data is an how to interpret it.
+
+To correlate our other data points to the 'attrition' event we could contruct some table of customer losses.  If we did that, then I would think that it is best to look at the other data points at a time relative to the date of that attrition.  For example, a data point in 2015 probably didn't cause an attrition event in 2018.  Similarly, a data point just a few days before the attrition event probably also didn't.  Customers don't generally decide at the last minute not to renew.
+
+Complications
+
+Customers don't always renew the same product that has expired. Material # indicates the product code of the product ordered.  For example, a customer could have an expiring contract with a Material # of 'S-STDWSPSSS-C-R', and they book a renewal of S-PWS-WS-M1.  This is the same product and a successful renewal, but this makes it difficult to calculate our renewal rate for a particular product code.
+
+The End Cust # field uniquely identifies an account.  However, this number may be inherited from a legacy system (pre-acquisition), and new bookings will have a new End Cust # (from Ivanti SAP).  It can be challenging to correlate the two.
+
+The bookings database can include credits.  These will generally show up with a negative Bookings Quantity representing a refund.  Just something to be aware of.
+
+A customer might upgrade to a different product part way through their contract.  The bookings database represents that they have an expiring contract for a certain Material #.  However, they also have a contract for a different Material #, with a Deal Type of New or Volume, which replaces the first contract.  It can be difficult to ascertain whether the initial contract was renewed.
+
+Certain parts of our customer base don't renew their Maintenance contracts at a rate consistent with the rest of the customer base.  They renew less often.  Most notable are our Supply Chain business and certain regions like China.  
+
+Volume purchasing history
+
+We believe that if an account has made New or Volume orders in the past X months, this is generally a good positive indication that a customer is more likely to renew their contract.
+
+This can be seen in the Bookings database.  Look for orders where [Deal Type] in ('New','Volume')
+
+CSat Survey
+
+To view the CSat results
+
+SELECT s.[ID]      
+      ,s.[CREATEDDATE]
+      ,s.[CASE__C]      
+      ,s.[RESOLUTION__C]
+      ,s.[OVERALL_GENERAL_COMMENTS__C]
+      ,s.[CUSTOMER_EFFORT__C]
+      ,c.ACCOUNTID
+  FROM [SFDC_IVANTI].[dbo].[SURVEY__C] s
+  JOIN [SFDC_IVANTI].[dbo].[CASE] c on c.ID = s.CASE__C
+  order by CREATEDDATE desc
+
+The current survey asks whether the customer is satisfied with the resolution provided and also how much effort was required on the part of the customer to resolve the issue.  These are both answered on a scale of 1-6, with 6 being better.  If the CUSTOMER_EFFORT__C value is 7 that means the question wasn't answered.  This question is relatively new so surveys created before a certain date will have a null value in this column.  A survey is always associated with a Case.  To link this back to the Account, you need to get the Account ID from the Case table and then join that to the Bookings table on the AccountID field.
+
+NPS Survey
+
+We send NPS surveys to various customer segments.  The frequency of these has been inconsistent.  The results are not currently in the Bookings database, and recent results are not in SFDC.  We are actually in the process of changing our solution, and part of that work will make these results available within SFDC.  We can then get them into the Data Warehouse.
+
+Case Information
+
+We can get information from the case from the SFDC_Ivanti database.  Here is a query with some of the less helpful fields removed:
+
+SELECT [ID]
+      ,[ACCOUNTID]
+      ,[STATUS]
+      ,[ORIGIN]
+      ,[SUBJECT]
+      ,[DESCRIPTION]
+      ,[ISCLOSED]
+      ,[CLOSEDDATE]
+      ,[OWNERID]
+      ,[CREATEDDATE]
+      ,[AUTOTEAM__C]
+      ,[CATEGORY__C]
+      ,[CLEARQUESTID__C]
+      ,[END_COMPANY__C]
+      ,[PRODUCT_VERSION__C]
+      ,[ESCALATED_OWNER__C]
+      ,[ESCALATED_STATUS__C]
+      ,[ESCALATION_QUEUE__C]
+      ,[WASESCALATED__C]
+      ,[IRT__C]
+      ,[MNGR_ESCALATED_OWNER__C]
+      ,[MNGR_ESCALATION_CAUSE__C]
+      ,[MNGR_ESCALATION_CONTACTS__C]
+      ,[MNGR_ESCALATION_SOURCE_LIST__C]
+      ,[PRODUCT_LINE__C]
+      ,[PRTMET__C]
+      ,[PRTTOTAL__C]
+      ,[PRODUCTFORTHISCASE__C]
+      ,[RESOLUTION__C]
+      ,[SEVERITY__C]
+      ,[SUB_COMPONENT__C]
+      ,[BUGDISCOVERYDATETIME__C]
+      ,[LEGACY_CLOSED_DATE__C]
+      ,[EFFECTIVECLOSEDDATE__C]
+      ,[BUGDISCOVERYAGE__C]
+      ,[KCS_DISPOSITION__C]
+      ,[LINKEDTODOC__C]
+      ,[KCS_LINK_STATE__C]
+      ,[PUBLISHTOCOMM__C]
+      ,[SITUATION__C]
+      ,[SUPPORT_PROGRAM__C]
+      ,[TIMESTAMPADDEDTOSITUATION__C]
+      ,[SITUATION_STATUS__C]
+      ,[ESCALATION_OWNER_NOTE__C]
+      ,[PSE_PRT_MET__C]
+      ,[PSE_PRT_SET__C]
+      ,[MNGR_ESCALATION_TIMESTAMP__C]
+      ,[END_COMPANY_ACCOUNT__C]
+      ,[MOST_RECENT_PSE_COMMENT__C]
+      ,[BUILD_VERSION__C]
+      ,[FIRSTASSIGNEDOWNER__C]
+      ,[CASE_COMPLEXITY__C]
+      ,[PROBLEMNUMBER__C]
+      ,[DAYS_CASE_OPENED__C]
+      ,[DAYS_MNGR_ESCALATED__C]
+      ,[MANAGER_RE_ESCALATION_NOTES__C]
+      ,[MNGR_DEESCALATION_FLAG__C]
+      ,[MNGR_ESCALATION_FLAG__C]
+      ,[MNGR_RE_ESCALATION_FLAG__C]
+      ,[DESCRIPTION_HTML__C]
+  FROM [SFDC_IVANTI].[dbo].[CASE]
+  where [RECORDTYPEID] = '01230000000ZUrUAAW'
+  and [CREATEDDATE] >= '2015-01-01'
+
+I can trim the list of fields down by a lot to only include the ones I think are important but I don't want to be too biased.  My observation is that the worst behavior we can see is a complete absence of any interaction with Support.  Customers with a large number of cases aren't necessarily unhealthy.  
+
+These fields include information showing whether a case was escalated to a manager, to Backline Support, or to Engineering.
+
+Community Usage
+
+We can see the last time a contact logged into our support portal here.  A customer needs to log in to open a case online or to participate in a community forum discussion.  There may be a way to get a more complete login history so that we can examine login frequency rather than the date of the most recent login.
+
+SELECT [ID]
+		,[AccountID]
+      ,[Community_Last_Login__c]
+ FROM [SFDC_IVANTI].[dbo].[CONTACT]
+
+The actual community discussions happen in Jive on commuity.ivanti.com.  We are in the process of moving this system over to the salesforce community and will be done in the fall.  It's possible that commuity forum participation shows engagement and could be correlated to renewal behavior.
+
+SELECT 
+      jp.[MESSAGEID]
+      ,jp.[POSTDATE]
+      ,jp.[POSTERID]
+	  ,c.[ACCOUNTID]
+  FROM [Bookings].[dbo].[JIVE_POSTS_VW_SFDC] jp
+  inner join [SFDC_IVANTI].[dbo].[CONTACT] c on c.[COMMUNITYID__C] = jp.[POSTERID]
+  order by jp.POSTDATE desc
+
+Other items to look at
+
+partner vs direct
+
+interchange and training
+
+product usage
+
+TRM or CSM
+
+
+
+
+
+
+
